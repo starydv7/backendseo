@@ -1,0 +1,44 @@
+{
+  "data": [
+    {
+      "id": "fe816cfa-9736-4c70-926c-e6590da771ae",
+      "title": "Pawan Yadav",
+      "slug": "pawan",
+      "excerpt": "Washdkjashfkyvhkjfn",
+      "content": "Full blog body text from the database...",
+      "status": "published",
+      "publishDate": "2026-08-04T10:46:00+00:00",
+      "featuredImage": "/uploads/186af40a-ad79-4617-ad6c-ba233dbfae68.jpg",
+      "socialSharingImage": "/uploads/b06388e6-c58a-40ac-830e-74f4f1d716e2.jpg",
+      "estimatedReadingTime": 1,
+      "metaKeywords": ["sgfdfsh", "hsdfkjdshfkj"],
+      "metaTitle": "dhfkjsdfhskjfh",
+      "metaDescription": "sdfgsdgsfjdsfh",
+      "authorId": "96caf03c-f26f-429c-bf4b-c18c554d0e13",
+      "createdAt": "2026-08-04T10:47:13.334793+00:00",
+      "updatedAt": "2026-08-04T10:47:48.134+00:00",
+      "author": {
+        "id": "96caf03c-f26f-429c-bf4b-c18c554d0e13",
+        "name": "Demo Author",
+        "email": "demo@backendseo.com",
+        "bio": "First author",
+        "avatarUrl": null
+      },
+      "categories": [
+        {
+          "id": "5b4b27c5-ca13-4325-91ec-21513b0711cd",
+          "name": "Frontend Test 123935",
+          "slug": "frontend-test-123935"
+        }
+      ],
+      "tags": [],
+      "relatedPosts": []
+    }
+  ],
+  "meta": {
+    "total": 1,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 1
+  }
+}

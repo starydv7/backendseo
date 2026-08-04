@@ -1,0 +1,50 @@
+{
+  "name": "backendseo",
+  "version": "1.0.0",
+  "description": "NestJS backend – Blog Management",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prestart": "node scripts/free-port.js",
+    "start": "nest start",
+    "prestart:dev": "node scripts/free-port.js",
+    "start:dev": "nest start --watch",
+    "prestart:prod": "node scripts/free-port.js",
+    "start:prod": "node dist/main",
+    "admin:dev": "npm --prefix admin run dev",
+    "admin:build": "npm --prefix admin run build",
+    "blog:dev": "npx --yes serve website -p 5174",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "db:schema": "node scripts/apply-schema.js",
+    "check:supabase": "node scripts/check-supabase.js"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/mapped-types": "^2.1.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.0",
+    "@supabase/supabase-js": "^2.112.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "dotenv": "^17.4.2",
+    "jose": "^6.2.8",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.20",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.10.5",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.7.2"
+  }
+}
