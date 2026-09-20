@@ -37,7 +37,10 @@ API URL is set in [`admin/.env`](admin/.env) as `VITE_API_URL=http://localhost:3
 - Manage authors, categories, tags
 - Approve / delete comments
 
-## Public blog (for SEO websites)
+## Deploy
+
+See **[DEPLOY.md](DEPLOY.md)** — Render (API) + Vercel (Admin).
+
 
 | What | Link |
 |------|------|

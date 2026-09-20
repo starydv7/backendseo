@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+dist
+.git
+admin
+website
+uploads
+.env
+*.md
+docs
+scripts
