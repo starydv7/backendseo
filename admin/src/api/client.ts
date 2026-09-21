@@ -40,17 +40,31 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new ApiError(0, {
+      message: `Failed to reach API (${API_URL}). If using Render, the service is Suspended — open Render Dashboard and click Resume.`,
+    });
+  }
 
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
 
-  if (!res.ok) throw new ApiError(res.status, data);
+  if (!res.ok) {
+    if (res.status === 503) {
+      throw new ApiError(503, {
+        message: `API returned 503 (Suspended/Unavailable) at ${API_URL}. Resume the Render service, then refresh.`,
+      });
+    }
+    throw new ApiError(res.status, data);
+  }
   return data as T;
 }
 
