@@ -1,14 +1,27 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
-import { BlogPostsService } from '../services/blog-posts.service';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { PublicCreateCommentDto } from '../dto/comment/public-create-comment.dto';
 import { PostStatus } from '../enums/post-status.enum';
+import { BlogPostsService } from '../services/blog-posts.service';
+import { CommentsService } from '../services/comments.service';
 
 /**
- * Public read-only endpoints for SEO / marketing websites.
- * Only returns published posts.
+ * Public read-only (+ comment submit) endpoints for SEO / marketing websites.
+ * Only returns published posts and approved comments.
  */
 @Controller('public')
 export class PublicBlogController {
-  constructor(private readonly blogPostsService: BlogPostsService) {}
+  constructor(
+    private readonly blogPostsService: BlogPostsService,
+    private readonly commentsService: CommentsService,
+  ) {}
 
   /** All published posts for blog listing pages */
   @Get('posts')
@@ -29,30 +42,117 @@ export class PublicBlogController {
     });
   }
 
-  /** Single published post by slug (SEO-friendly URL) */
+  /** Single published post by slug (SEO-friendly URL) — full package */
   @Get('posts/slug/:slug')
-  async bySlug(@Param('slug') slug: string) {
-    const post = await this.blogPostsService.findBySlug(slug);
-    if (post.status !== PostStatus.PUBLISHED) {
-      throw new NotFoundException(`Published post "${slug}" not found`);
-    }
-    // Only approved comments for public
+  bySlug(@Param('slug') slug: string) {
+    return this.fullPost(slug);
+  }
+
+  /** Approved comments for a published post (by slug or id) */
+  @Get('posts/:slugOrId/comments')
+  async comments(@Param('slugOrId') slugOrId: string) {
+    const post = await this.requirePublished(slugOrId);
+    const comments = await this.commentsService.findByPost(post.id, true);
     return {
-      ...post,
-      comments: (post.comments ?? []).filter((c: { isApproved: boolean }) => c.isApproved),
+      postId: post.id,
+      slug: post.slug,
+      commentCount: comments.length,
+      comments: this.nestComments(comments),
     };
   }
 
-  /** Single published post by id */
-  @Get('posts/:id')
-  async byId(@Param('id') id: string) {
-    const post = await this.blogPostsService.findOne(id);
+  /**
+   * One more thing: visitors can submit a comment from any SEO site.
+   * Comments stay pending until an admin approves them in the CMS.
+   */
+  @Post('posts/:slugOrId/comments')
+  async submitComment(
+    @Param('slugOrId') slugOrId: string,
+    @Body() dto: PublicCreateCommentDto,
+  ) {
+    const post = await this.requirePublished(slugOrId);
+    const comment = await this.commentsService.create(post.id, {
+      ...dto,
+      isApproved: false,
+    });
+    return {
+      message: 'Comment submitted and awaiting moderation',
+      comment: {
+        id: comment.id,
+        authorName: comment.authorName,
+        content: comment.content,
+        parentId: comment.parentId,
+        createdAt: comment.createdAt,
+        isApproved: comment.isApproved,
+      },
+    };
+  }
+
+  /**
+   * Full post package by id or slug:
+   * post + author + categories + tags + relatedPosts + approved comments + commentCount
+   */
+  @Get('posts/:slugOrId')
+  bySlugOrId(@Param('slugOrId') slugOrId: string) {
+    return this.fullPost(slugOrId);
+  }
+
+  private async fullPost(slugOrId: string) {
+    const post = await this.requirePublished(slugOrId);
+    const approved = (post.comments ?? [])
+      .filter((c: { isApproved: boolean }) => c.isApproved)
+      .sort(
+        (a: { createdAt: string }, b: { createdAt: string }) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+
+    const { comments: _raw, ...rest } = post;
+
+    return {
+      ...rest,
+      commentCount: approved.length,
+      comments: this.nestComments(approved),
+      shareUrl: `/public/posts/slug/${post.slug}`,
+    };
+  }
+
+  private async requirePublished(slugOrId: string) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        slugOrId,
+      );
+    const post = isUuid
+      ? await this.blogPostsService.findOne(slugOrId)
+      : await this.blogPostsService.findBySlug(slugOrId);
+
     if (post.status !== PostStatus.PUBLISHED) {
       throw new NotFoundException(`Published post not found`);
     }
-    return {
-      ...post,
-      comments: (post.comments ?? []).filter((c: { isApproved: boolean }) => c.isApproved),
-    };
+    return post;
+  }
+
+  /** Public-safe comment shape (no email) + nested replies */
+  private nestComments(comments: any[]) {
+    const map = new Map<string, any>();
+    for (const c of comments) {
+      map.set(c.id, {
+        id: c.id,
+        authorName: c.authorName,
+        content: c.content,
+        parentId: c.parentId ?? null,
+        createdAt: c.createdAt,
+        replies: [] as any[],
+      });
+    }
+    const roots: any[] = [];
+    for (const c of comments) {
+      const node = map.get(c.id);
+      if (c.parentId && map.has(c.parentId)) {
+        map.get(c.parentId).replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    return roots;
   }
 }

@@ -14,6 +14,13 @@ export class AppController {
         tags: '/blog/tags',
         posts: '/blog/posts',
         comments: '/blog/posts/:postId/comments',
+        public: {
+          posts: '/public/posts',
+          postFull: '/public/posts/:slugOrId',
+          postBySlug: '/public/posts/slug/:slug',
+          postComments: '/public/posts/:slugOrId/comments',
+          submitComment: 'POST /public/posts/:slugOrId/comments',
+        },
       },
     };
   }
