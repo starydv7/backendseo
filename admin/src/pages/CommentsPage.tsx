@@ -63,7 +63,7 @@ export function CommentsPage() {
       <div className="page-header">
         <div>
           <h2>Comments</h2>
-          <p>Moderate comments on a selected post.</p>
+          <p>Comments go live on websites immediately. Delete spam if needed.</p>
         </div>
       </div>
 

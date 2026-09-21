@@ -62,8 +62,8 @@ export class PublicBlogController {
   }
 
   /**
-   * One more thing: visitors can submit a comment from any SEO site.
-   * Comments stay pending until an admin approves them in the CMS.
+   * Visitors can submit a comment from any SEO site.
+   * Comments go live immediately (no admin approval required).
    */
   @Post('posts/:slugOrId/comments')
   async submitComment(
@@ -73,10 +73,10 @@ export class PublicBlogController {
     const post = await this.requirePublished(slugOrId);
     const comment = await this.commentsService.create(post.id, {
       ...dto,
-      isApproved: false,
+      isApproved: true,
     });
     return {
-      message: 'Comment submitted and awaiting moderation',
+      message: 'Comment posted',
       comment: {
         id: comment.id,
         authorName: comment.authorName,

@@ -11,7 +11,7 @@ Replace with your live API domain in production.
 | **Full post (everything + comments)** | GET | `http://localhost:3000/public/posts/{slugOrId}` |
 | **One post by slug** | GET | `http://localhost:3000/public/posts/slug/{slug}` |
 | **Comments only (nested)** | GET | `http://localhost:3000/public/posts/{slugOrId}/comments` |
-| **Submit a comment (pending moderation)** | POST | `http://localhost:3000/public/posts/{slugOrId}/comments` |
+| **Submit a comment (goes live immediately)** | POST | `http://localhost:3000/public/posts/{slugOrId}/comments` |
 | Featured/social image file | GET | `http://localhost:3000/uploads/{filename}` |
 
 Full post response includes: content, author, categories, tags, relatedPosts, nested approved comments, `commentCount`, and `shareUrl`.
