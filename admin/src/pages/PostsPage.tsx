@@ -100,6 +100,7 @@ export function PostsPage() {
               <tr>
                 <th>Title</th>
                 <th>Status</th>
+                <th>Publish date</th>
                 <th>Author</th>
                 <th>Reading</th>
                 <th />
@@ -114,6 +115,11 @@ export function PostsPage() {
                   </td>
                   <td>
                     <span className={`badge badge-${p.status}`}>{p.status}</span>
+                  </td>
+                  <td className="muted">
+                    {p.publishDate
+                      ? new Date(p.publishDate).toLocaleString()
+                      : '—'}
                   </td>
                   <td className="muted">{p.author?.name || '—'}</td>
                   <td className="muted">{p.estimatedReadingTime} min</td>

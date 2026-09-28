@@ -5,6 +5,7 @@ import { mediaUrl } from '../api/client';
 import {
   authorsApi,
   categoriesApi,
+  commentsApi,
   postsApi,
   tagsApi,
 } from '../api/blog';
@@ -12,6 +13,7 @@ import type {
   Author,
   BlogPost,
   Category,
+  Comment,
   CreatePostInput,
   PostStatus,
   Tag,
@@ -28,6 +30,8 @@ type FormState = {
   categoryIds: string[];
   tagIds: string[];
   relatedPostIds: string[];
+  featuredImage: string;
+  socialSharingImage: string;
   metaTitle: string;
   metaDescription: string;
   metaKeywords: string;
@@ -44,6 +48,8 @@ const emptyForm: FormState = {
   categoryIds: [],
   tagIds: [],
   relatedPostIds: [],
+  featuredImage: '',
+  socialSharingImage: '',
   metaTitle: '',
   metaDescription: '',
   metaKeywords: '',
@@ -62,6 +68,15 @@ function fromLocalInput(value: string): string | undefined {
   return new Date(value).toISOString();
 }
 
+function estimateReadingTime(content: string): number {
+  const words = content
+    .replace(/<[^>]*>/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
 export function PostEditorPage() {
   const { id } = useParams();
   const isNew = !id || id === 'new';
@@ -76,8 +91,10 @@ export function PostEditorPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<'featured' | 'social' | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const readingMinutes = estimateReadingTime(form.content);
 
   useEffect(() => {
     void (async () => {
@@ -106,6 +123,7 @@ export function PostEditorPage() {
       try {
         const data = await postsApi.get(id!);
         setPost(data);
+        setComments(await commentsApi.listByPost(data.id));
         setForm({
           title: data.title,
           slug: data.slug,
@@ -117,6 +135,8 @@ export function PostEditorPage() {
           categoryIds: (data.categories ?? []).map((x) => x.id),
           tagIds: (data.tags ?? []).map((x) => x.id),
           relatedPostIds: (data.relatedPosts ?? []).map((x) => x.id),
+          featuredImage: data.featuredImage ?? '',
+          socialSharingImage: data.socialSharingImage ?? '',
           metaTitle: data.metaTitle ?? '',
           metaDescription: data.metaDescription ?? '',
           metaKeywords: (data.metaKeywords ?? []).join(', '),
@@ -163,6 +183,8 @@ export function PostEditorPage() {
       categoryIds: form.categoryIds,
       tagIds: form.tagIds,
       relatedPostIds: form.relatedPostIds,
+      featuredImage: form.featuredImage.trim(),
+      socialSharingImage: form.socialSharingImage.trim(),
       metaTitle: form.metaTitle.trim() || undefined,
       metaDescription: form.metaDescription.trim() || undefined,
       metaKeywords: keywords.length ? keywords : undefined,
@@ -177,6 +199,17 @@ export function PostEditorPage() {
     try {
       const payload = buildPayload();
       if (forceStatus) payload.status = forceStatus;
+      if (payload.status === 'published' && !payload.publishDate) {
+        payload.publishDate = new Date().toISOString();
+      }
+      if (payload.status === 'scheduled') {
+        if (!payload.publishDate) {
+          throw new Error('Scheduled posts need a future publish date.');
+        }
+        if (new Date(payload.publishDate).getTime() <= Date.now()) {
+          throw new Error('Publish date must be in the future for scheduled posts.');
+        }
+      }
       if (isNew) {
         const created = await postsApi.create(payload);
         setMessage('Post created. Scroll down to upload images.');
@@ -184,9 +217,13 @@ export function PostEditorPage() {
       } else {
         const updated = await postsApi.update(id!, payload);
         setPost(updated);
+        setComments(await commentsApi.listByPost(updated.id));
         setForm((f) => ({
           ...f,
           status: updated.status,
+          publishDate: toLocalInput(updated.publishDate),
+          featuredImage: updated.featuredImage ?? '',
+          socialSharingImage: updated.socialSharingImage ?? '',
         }));
         setMessage(
           updated.status === 'published' ? 'Post published.' : 'Post saved.',
@@ -216,6 +253,17 @@ export function PostEditorPage() {
           ? await postsApi.uploadFeatured(id, file)
           : await postsApi.uploadSocial(id, file);
       setPost(updated);
+      setForm((f) => ({
+        ...f,
+        featuredImage:
+          kind === 'featured'
+            ? (updated.featuredImage ?? '')
+            : f.featuredImage,
+        socialSharingImage:
+          kind === 'social'
+            ? (updated.socialSharingImage ?? '')
+            : f.socialSharingImage,
+      }));
       setMessage(
         kind === 'featured'
           ? 'Featured image uploaded.'
@@ -228,6 +276,18 @@ export function PostEditorPage() {
     }
   }
 
+  async function onDeleteComment(commentId: string) {
+    if (!id || !confirm('Delete this comment?')) return;
+    setError('');
+    try {
+      await commentsApi.remove(commentId);
+      setComments(await commentsApi.listByPost(id));
+      setMessage('Comment deleted.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
   if (loading) return <div className="empty">Loading post…</div>;
 
   return (
@@ -236,9 +296,8 @@ export function PostEditorPage() {
         <div>
           <h2>{isNew ? 'New post' : 'Edit post'}</h2>
           <p>
-            {isNew
-              ? 'Create a draft, then add images and publish.'
-              : `Reading time ~${post?.estimatedReadingTime ?? 1} min`}
+            Estimated reading time: {readingMinutes} min
+            {isNew ? ' · save as draft, schedule, or publish' : ''}
           </p>
         </div>
         <Link className="btn btn-secondary" to="/posts">
@@ -308,6 +367,13 @@ export function PostEditorPage() {
               <option value="scheduled">Scheduled</option>
               <option value="published">Published</option>
             </select>
+            <span className="muted">
+              {form.status === 'scheduled'
+                ? 'Needs a future publish date. It goes live automatically at that time.'
+                : form.status === 'published'
+                  ? 'Visible on websites immediately.'
+                  : 'Hidden from websites until you publish or schedule it.'}
+            </span>
           </div>
           <div className="field">
             <label htmlFor="publishDate">Publish date</label>
@@ -419,6 +485,48 @@ export function PostEditorPage() {
           </div>
         </div>
 
+        <div className="grid-2">
+          <div className="field">
+            <label htmlFor="featuredImage">Featured image URL</label>
+            <input
+              id="featuredImage"
+              placeholder="https://..."
+              value={form.featuredImage}
+              onChange={(e) =>
+                setForm({ ...form, featuredImage: e.target.value })
+              }
+            />
+            {form.featuredImage.trim() ? (
+              <img
+                className="image-preview"
+                src={mediaUrl(form.featuredImage.trim()) || form.featuredImage}
+                alt="Featured preview"
+              />
+            ) : null}
+          </div>
+          <div className="field">
+            <label htmlFor="socialSharingImage">Social sharing image URL</label>
+            <input
+              id="socialSharingImage"
+              placeholder="https://..."
+              value={form.socialSharingImage}
+              onChange={(e) =>
+                setForm({ ...form, socialSharingImage: e.target.value })
+              }
+            />
+            {form.socialSharingImage.trim() ? (
+              <img
+                className="image-preview"
+                src={
+                  mediaUrl(form.socialSharingImage.trim()) ||
+                  form.socialSharingImage
+                }
+                alt="Social preview"
+              />
+            ) : null}
+          </div>
+        </div>
+
         <div className="field">
           <label htmlFor="metaDescription">Meta description</label>
           <textarea
@@ -484,10 +592,54 @@ export function PostEditorPage() {
       ) : (
         <div className="panel form-stack" style={{ marginTop: '1rem' }}>
           <p className="muted" style={{ margin: 0 }}>
-            Image upload buttons appear here after you click <strong>Create post</strong>.
+            Paste image URLs above, or upload files after you click <strong>Create post</strong>.
           </p>
         </div>
       )}
+
+      {!isNew && post ? (
+        <div className="panel form-stack" style={{ marginTop: '1rem' }}>
+          <h3 style={{ margin: 0 }}>Comments</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            Visitor comments on this post. They appear on websites as soon as they are posted.
+          </p>
+          {comments.length === 0 ? (
+            <div className="empty">No comments yet.</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Author</th>
+                    <th>Comment</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {comments.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <div>{c.authorName}</div>
+                        <div className="muted">{c.authorEmail}</div>
+                      </td>
+                      <td>{c.content}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => void onDeleteComment(c.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

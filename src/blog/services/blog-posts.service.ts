@@ -32,9 +32,22 @@ export class BlogPostsService {
     private readonly tagsService: TagsService,
   ) {}
 
+  /** Flip due scheduled posts to published so they appear on websites. */
+  async promoteDueScheduledPosts() {
+    const now = new Date().toISOString();
+    const { error } = await this.supabase
+      .from('blog_posts')
+      .update({ status: PostStatus.PUBLISHED, updatedAt: now })
+      .eq('status', PostStatus.SCHEDULED)
+      .lte('publishDate', now);
+    if (error) throw error;
+  }
+
   async create(dto: CreateBlogPostDto) {
     const slug = await this.resolveUniqueSlug(dto.slug || slugify(dto.title));
-    this.validateStatusAndDate(dto.status, dto.publishDate);
+    const status = dto.status ?? PostStatus.DRAFT;
+    const publishDate = this.resolvePublishDate(status, dto.publishDate);
+    this.validateStatusAndDate(status, publishDate);
 
     if (dto.authorId) await this.authorsService.findOne(dto.authorId);
     if (dto.categoryIds?.length) {
@@ -52,10 +65,10 @@ export class BlogPostsService {
         slug,
         excerpt: dto.excerpt ?? null,
         content: dto.content,
-        status: dto.status ?? PostStatus.DRAFT,
-        publishDate: dto.publishDate ?? null,
-        featuredImage: dto.featuredImage ?? null,
-        socialSharingImage: dto.socialSharingImage ?? null,
+        status,
+        publishDate,
+        featuredImage: dto.featuredImage?.trim() || null,
+        socialSharingImage: dto.socialSharingImage?.trim() || null,
         estimatedReadingTime: estimateReadingTime(dto.content),
         metaKeywords: dto.metaKeywords ?? null,
         metaTitle: dto.metaTitle ?? null,
@@ -77,6 +90,7 @@ export class BlogPostsService {
   }
 
   async findAll(query: QueryBlogPostDto) {
+    await this.promoteDueScheduledPosts();
     const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
     const limit = Math.min(
       100,
@@ -128,6 +142,7 @@ export class BlogPostsService {
   }
 
   async findOne(id: string) {
+    await this.promoteDueScheduledPosts();
     const { data, error } = await this.supabase
       .from('blog_posts')
       .select(`${POST_SELECT}, comments:comments(*)`)
@@ -139,6 +154,7 @@ export class BlogPostsService {
   }
 
   async findBySlug(slug: string) {
+    await this.promoteDueScheduledPosts();
     const { data, error } = await this.supabase
       .from('blog_posts')
       .select(`${POST_SELECT}, comments:comments(*)`)
@@ -154,10 +170,10 @@ export class BlogPostsService {
   async update(id: string, dto: UpdateBlogPostDto) {
     const existing = await this.findOne(id);
     const nextStatus = dto.status ?? existing.status;
-    const nextPublishDate =
-      dto.publishDate !== undefined
-        ? dto.publishDate
-        : existing.publishDate;
+    const nextPublishDate = this.resolvePublishDate(
+      nextStatus,
+      dto.publishDate !== undefined ? dto.publishDate : existing.publishDate,
+    );
     this.validateStatusAndDate(nextStatus, nextPublishDate ?? undefined);
 
     if (dto.authorId) await this.authorsService.findOne(dto.authorId);
@@ -182,12 +198,14 @@ export class BlogPostsService {
       patch.estimatedReadingTime = estimateReadingTime(dto.content);
     }
     if (dto.status !== undefined) patch.status = dto.status;
-    if (dto.publishDate !== undefined) patch.publishDate = dto.publishDate;
+    if (dto.publishDate !== undefined || nextPublishDate !== existing.publishDate) {
+      patch.publishDate = nextPublishDate;
+    }
     if (dto.featuredImage !== undefined) {
-      patch.featuredImage = dto.featuredImage;
+      patch.featuredImage = dto.featuredImage.trim() || null;
     }
     if (dto.socialSharingImage !== undefined) {
-      patch.socialSharingImage = dto.socialSharingImage;
+      patch.socialSharingImage = dto.socialSharingImage.trim() || null;
     }
     if (dto.metaKeywords !== undefined) patch.metaKeywords = dto.metaKeywords;
     if (dto.metaTitle !== undefined) patch.metaTitle = dto.metaTitle;
@@ -263,6 +281,16 @@ export class BlogPostsService {
         .map((r: any) => r.related ?? r)
         .filter(Boolean),
     };
+  }
+
+  private resolvePublishDate(
+    status: PostStatus | string,
+    publishDate?: string | null,
+  ): string | null {
+    if (status === PostStatus.PUBLISHED && !publishDate) {
+      return new Date().toISOString();
+    }
+    return publishDate ?? null;
   }
 
   private validateStatusAndDate(
