@@ -37,6 +37,7 @@ export interface BlogPost {
   publishDate: string | null;
   featuredImage: string | null;
   socialSharingImage: string | null;
+  images?: string[];
   estimatedReadingTime: number;
   metaKeywords: string[] | null;
   metaTitle: string | null;

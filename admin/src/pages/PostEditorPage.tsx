@@ -99,6 +99,8 @@ export function PostEditorPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const readingMinutes = estimateReadingTime(form.content);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const [insertingImage, setInsertingImage] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -293,6 +295,29 @@ export function PostEditorPage() {
     }
   }
 
+  async function insertContentImage(file: File | undefined) {
+    if (!file) return;
+    setInsertingImage(true);
+    setError('');
+    setMessage('');
+    try {
+      const uploaded = await postsApi.uploadImage(file);
+      const alt = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+      const snippet = `\n\n![${alt}](${uploaded.url})\n\n`;
+      const el = contentRef.current;
+      const start = el?.selectionStart ?? form.content.length;
+      const end = el?.selectionEnd ?? start;
+      const next =
+        form.content.slice(0, start) + snippet + form.content.slice(end);
+      setForm((f) => ({ ...f, content: next }));
+      setMessage('Image inserted into the content. Save or publish to keep it.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not insert image');
+    } finally {
+      setInsertingImage(false);
+    }
+  }
+
   async function onDeleteComment(commentId: string) {
     if (!id || !confirm('Delete this comment?')) return;
     setError('');
@@ -361,13 +386,35 @@ export function PostEditorPage() {
 
         <div className="field">
           <label htmlFor="content">Content</label>
+          <div className="row-actions">
+            <label className={`btn btn-secondary ${insertingImage ? 'disabled' : ''}`}>
+              {insertingImage ? 'Uploading image…' : 'Insert image in content'}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                disabled={insertingImage || saving}
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  void insertContentImage(file);
+                }}
+              />
+            </label>
+          </div>
+          <span className="muted">
+            Click in the text where the image should appear, then insert it.
+            The image is saved as a public link inside the content.
+          </span>
           <textarea
             id="content"
+            ref={contentRef}
             required
             style={{ minHeight: 260 }}
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
           />
+          <ContentImages content={form.content} />
         </div>
 
         <div className="grid-3">
@@ -483,7 +530,7 @@ export function PostEditorPage() {
 
         <div className="grid-2">
           <div className="field">
-            <label htmlFor="metaTitle">Meta title</label>
+            <label htmlFor="metaTitle">Meta title ({form.metaTitle.length}/60)</label>
             <input
               id="metaTitle"
               value={form.metaTitle}
@@ -532,7 +579,9 @@ export function PostEditorPage() {
         </div>
 
         <div className="field">
-          <label htmlFor="metaDescription">Meta description</label>
+          <label htmlFor="metaDescription">
+            Meta description ({form.metaDescription.length}/160)
+          </label>
           <textarea
             id="metaDescription"
             value={form.metaDescription}
@@ -617,6 +666,26 @@ export function PostEditorPage() {
   );
 }
 
+function ContentImages({ content }: { content: string }) {
+  const urls = Array.from(
+    content.matchAll(/!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/g),
+    (match) => match[1],
+  );
+  if (urls.length === 0) return null;
+  return (
+    <div className="content-images">
+      <span className="muted">
+        {urls.length} image{urls.length === 1 ? '' : 's'} inside this post
+      </span>
+      <div className="content-image-row">
+        {urls.map((url) => (
+          <img key={url} src={url} alt="" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ImageField({
   id,
   label,
@@ -662,6 +731,7 @@ function ImageField({
             if (prev) URL.revokeObjectURL(prev);
             return next ? URL.createObjectURL(next) : null;
           });
+          if (next) onUpload(next);
         }}
       />
       <div className="row-actions">
@@ -677,9 +747,15 @@ function ImageField({
         </button>
       </div>
       <span className="muted">
-        {file
-          ? `${file.name} will be uploaded when you save or publish.`
-          : 'Paste a link, or choose a file. Publishing saves the image on the website.'}
+        {value.startsWith('/uploads/')
+          ? 'This file is only on the API server, so other websites cannot show it. Choose the image again.'
+          : file
+            ? busy
+              ? `Uploading ${file.name}…`
+              : value.startsWith('http')
+                ? 'Uploaded. Save or publish so the website uses this link.'
+                : `${file.name} is selected.`
+            : 'Paste an https link, or choose a file. Uploads become a public image link.'}
       </span>
       {preview ? <img className="image-preview" src={preview} alt={label} /> : null}
     </div>

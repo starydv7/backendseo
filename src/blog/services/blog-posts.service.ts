@@ -10,7 +10,12 @@ import { CreateBlogPostDto } from '../dto/post/create-blog-post.dto';
 import { QueryBlogPostDto } from '../dto/post/query-blog-post.dto';
 import { UpdateBlogPostDto } from '../dto/post/update-blog-post.dto';
 import { PostStatus } from '../enums/post-status.enum';
-import { estimateReadingTime, slugify } from '../utils/blog.utils';
+import {
+  absoluteMediaUrl,
+  estimateReadingTime,
+  extractContentImages,
+  slugify,
+} from '../utils/blog.utils';
 import { AuthorsService } from './authors.service';
 import { CategoriesService } from './categories.service';
 import { TagsService } from './tags.service';
@@ -271,8 +276,21 @@ export class BlogPostsService {
   }
 
   private normalizePost(row: any) {
+    const content = typeof row.content === 'string' ? row.content : '';
+    const featuredImage = absoluteMediaUrl(row.featuredImage);
+    const socialSharingImage = absoluteMediaUrl(row.socialSharingImage);
+    const images = Array.from(
+      new Set(
+        [featuredImage, socialSharingImage, ...extractContentImages(content)].filter(
+          (url): url is string => Boolean(url),
+        ),
+      ),
+    );
     return {
       ...row,
+      featuredImage,
+      socialSharingImage,
+      images,
       categories: (row.categories ?? [])
         .map((c: any) => c.category ?? c)
         .filter(Boolean),

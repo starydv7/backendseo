@@ -208,6 +208,7 @@ button {
 }
 
 .btn {
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -413,6 +414,26 @@ table.data tr:hover td {
   background: rgba(13, 148, 136, 0.1);
   color: var(--accent-strong);
   font-weight: 600;
+}
+
+.content-images {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.content-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.content-image-row img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
 .image-preview {
