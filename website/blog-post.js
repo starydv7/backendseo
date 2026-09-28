@@ -22,6 +22,40 @@
     return api + (path.startsWith('/') ? path : '/' + path);
   }
 
+  function renderContent(content) {
+    const text = String(content || '').replace(/\r\n/g, '\n');
+    const blocks = text.split(/\n{2,}/);
+    return blocks
+      .map(function (block) {
+        const trimmed = block.trim();
+        if (!trimmed) return '';
+        const image = trimmed.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
+        if (image) {
+          return (
+            '<img src="' +
+            escapeHtml(image[2]) +
+            '" alt="' +
+            escapeHtml(image[1]) +
+            '" />'
+          );
+        }
+        const html = escapeHtml(trimmed).replace(
+          /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+          function (_m, alt, url) {
+            return (
+              '<img src="' +
+              escapeHtml(url) +
+              '" alt="' +
+              escapeHtml(alt) +
+              '" />'
+            );
+          },
+        );
+        return '<p>' + html.replace(/\n/g, '<br />') + '</p>';
+      })
+      .join('');
+  }
+
   function escapeHtml(str) {
     return String(str || '')
       .replace(/&/g, '&amp;')
@@ -73,7 +107,7 @@
         tags +
         '</div>' +
         '<div class="content">' +
-        escapeHtml(post.content) +
+        renderContent(post.content) +
         '</div>';
     })
     .catch(function (err) {
