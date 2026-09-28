@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { mediaUrl } from '../api/client';
@@ -91,6 +91,10 @@ export function PostEditorPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<'featured' | 'social' | null>(null);
+  const pendingImages = useRef<{ featured: File | null; social: File | null }>({
+    featured: null,
+    social: null,
+  });
   const [comments, setComments] = useState<Comment[]>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -210,6 +214,20 @@ export function PostEditorPage() {
           throw new Error('Publish date must be in the future for scheduled posts.');
         }
       }
+      if (pendingImages.current.featured) {
+        setUploading('featured');
+        const uploaded = await postsApi.uploadImage(pendingImages.current.featured);
+        payload.featuredImage = uploaded.url;
+        pendingImages.current.featured = null;
+        setForm((f) => ({ ...f, featuredImage: uploaded.url }));
+      }
+      if (pendingImages.current.social) {
+        setUploading('social');
+        const uploaded = await postsApi.uploadImage(pendingImages.current.social);
+        payload.socialSharingImage = uploaded.url;
+        pendingImages.current.social = null;
+        setForm((f) => ({ ...f, socialSharingImage: uploaded.url }));
+      }
       if (isNew) {
         const created = await postsApi.create(payload);
         setMessage('Post created.');
@@ -257,6 +275,7 @@ export function PostEditorPage() {
         const uploaded = await postsApi.uploadImage(file);
         url = uploaded.url;
       }
+      pendingImages.current[kind] = null;
       setForm((f) =>
         kind === 'featured'
           ? { ...f, featuredImage: url }
@@ -489,8 +508,11 @@ export function PostEditorPage() {
             label="Featured image"
             value={form.featuredImage}
             busy={uploading === 'featured'}
-            disabled={uploading !== null}
+            disabled={uploading !== null || saving}
             onChange={(value) => setForm({ ...form, featuredImage: value })}
+            onFile={(file) => {
+              pendingImages.current.featured = file;
+            }}
             onUpload={(file) => void onUpload('featured', file)}
           />
           <ImageField
@@ -498,10 +520,13 @@ export function PostEditorPage() {
             label="Social sharing image"
             value={form.socialSharingImage}
             busy={uploading === 'social'}
-            disabled={uploading !== null}
+            disabled={uploading !== null || saving}
             onChange={(value) =>
               setForm({ ...form, socialSharingImage: value })
             }
+            onFile={(file) => {
+              pendingImages.current.social = file;
+            }}
             onUpload={(file) => void onUpload('social', file)}
           />
         </div>
@@ -599,6 +624,7 @@ function ImageField({
   busy,
   disabled,
   onChange,
+  onFile,
   onUpload,
 }: {
   id: string;
@@ -607,17 +633,20 @@ function ImageField({
   busy: boolean;
   disabled: boolean;
   onChange: (value: string) => void;
+  onFile: (file: File | null) => void;
   onUpload: (file: File) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const preview = value.trim() ? mediaUrl(value.trim()) || value : null;
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const preview =
+    localPreview || (value.trim() ? mediaUrl(value.trim()) || value : null);
 
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
-        placeholder="https://... or upload a file below"
+        placeholder="https://..."
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -625,7 +654,15 @@ function ImageField({
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"
         disabled={disabled}
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          const next = e.target.files?.[0] ?? null;
+          setFile(next);
+          onFile(next);
+          setLocalPreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return next ? URL.createObjectURL(next) : null;
+          });
+        }}
       />
       <div className="row-actions">
         <button
@@ -639,7 +676,11 @@ function ImageField({
           {busy ? 'Uploading…' : 'Upload image'}
         </button>
       </div>
-      <span className="muted">Paste a link, or choose a file and upload it.</span>
+      <span className="muted">
+        {file
+          ? `${file.name} will be uploaded when you save or publish.`
+          : 'Paste a link, or choose a file. Publishing saves the image on the website.'}
+      </span>
       {preview ? <img className="image-preview" src={preview} alt={label} /> : null}
     </div>
   );
