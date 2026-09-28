@@ -61,6 +61,8 @@ export const postsApi = {
   update: (id: string, body: Partial<CreatePostInput>) =>
     api.patch<BlogPost>(`/blog/posts/${id}`, body),
   remove: (id: string) => api.delete(`/blog/posts/${id}`),
+  uploadImage: (file: File) =>
+    api.upload<{ url: string }>('/blog/posts/uploads', file),
   uploadFeatured: (id: string, file: File) =>
     api.upload<BlogPost>(`/blog/posts/${id}/featured-image`, file),
   uploadSocial: (id: string, file: File) =>

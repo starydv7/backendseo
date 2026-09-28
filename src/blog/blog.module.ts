@@ -10,6 +10,7 @@ import { BlogPostsService } from './services/blog-posts.service';
 import { CategoriesService } from './services/categories.service';
 import { CommentsService } from './services/comments.service';
 import { TagsService } from './services/tags.service';
+import { UploadsService } from './services/uploads.service';
 
 @Module({
   controllers: [
@@ -26,6 +27,7 @@ import { TagsService } from './services/tags.service';
     TagsService,
     BlogPostsService,
     CommentsService,
+    UploadsService,
   ],
   exports: [
     AuthorsService,

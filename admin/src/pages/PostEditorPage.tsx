@@ -212,7 +212,7 @@ export function PostEditorPage() {
       }
       if (isNew) {
         const created = await postsApi.create(payload);
-        setMessage('Post created. Scroll down to upload images.');
+        setMessage('Post created.');
         navigate(`/posts/${created.id}`, { replace: true });
       } else {
         const updated = await postsApi.update(id!, payload);
@@ -236,34 +236,32 @@ export function PostEditorPage() {
     }
   }
 
-  async function onUpload(
-    kind: 'featured' | 'social',
-    file: File | undefined,
-  ) {
-    if (!file || isNew || !id) {
-      setError('Save the post first, then upload images.');
-      return;
-    }
+  async function onUpload(kind: 'featured' | 'social', file: File | undefined) {
+    if (!file) return;
     setUploading(kind);
     setError('');
     setMessage('');
     try {
-      const updated =
-        kind === 'featured'
-          ? await postsApi.uploadFeatured(id, file)
-          : await postsApi.uploadSocial(id, file);
-      setPost(updated);
-      setForm((f) => ({
-        ...f,
-        featuredImage:
+      let url = '';
+      if (!isNew && id) {
+        const updated =
           kind === 'featured'
-            ? (updated.featuredImage ?? '')
-            : f.featuredImage,
-        socialSharingImage:
-          kind === 'social'
-            ? (updated.socialSharingImage ?? '')
-            : f.socialSharingImage,
-      }));
+            ? await postsApi.uploadFeatured(id, file)
+            : await postsApi.uploadSocial(id, file);
+        setPost(updated);
+        url =
+          (kind === 'featured'
+            ? updated.featuredImage
+            : updated.socialSharingImage) ?? '';
+      } else {
+        const uploaded = await postsApi.uploadImage(file);
+        url = uploaded.url;
+      }
+      setForm((f) =>
+        kind === 'featured'
+          ? { ...f, featuredImage: url }
+          : { ...f, socialSharingImage: url },
+      );
       setMessage(
         kind === 'featured'
           ? 'Featured image uploaded.'
@@ -486,45 +484,26 @@ export function PostEditorPage() {
         </div>
 
         <div className="grid-2">
-          <div className="field">
-            <label htmlFor="featuredImage">Featured image URL</label>
-            <input
-              id="featuredImage"
-              placeholder="https://..."
-              value={form.featuredImage}
-              onChange={(e) =>
-                setForm({ ...form, featuredImage: e.target.value })
-              }
-            />
-            {form.featuredImage.trim() ? (
-              <img
-                className="image-preview"
-                src={mediaUrl(form.featuredImage.trim()) || form.featuredImage}
-                alt="Featured preview"
-              />
-            ) : null}
-          </div>
-          <div className="field">
-            <label htmlFor="socialSharingImage">Social sharing image URL</label>
-            <input
-              id="socialSharingImage"
-              placeholder="https://..."
-              value={form.socialSharingImage}
-              onChange={(e) =>
-                setForm({ ...form, socialSharingImage: e.target.value })
-              }
-            />
-            {form.socialSharingImage.trim() ? (
-              <img
-                className="image-preview"
-                src={
-                  mediaUrl(form.socialSharingImage.trim()) ||
-                  form.socialSharingImage
-                }
-                alt="Social preview"
-              />
-            ) : null}
-          </div>
+          <ImageField
+            id="featuredImage"
+            label="Featured image"
+            value={form.featuredImage}
+            busy={uploading === 'featured'}
+            disabled={uploading !== null}
+            onChange={(value) => setForm({ ...form, featuredImage: value })}
+            onUpload={(file) => void onUpload('featured', file)}
+          />
+          <ImageField
+            id="socialSharingImage"
+            label="Social sharing image"
+            value={form.socialSharingImage}
+            busy={uploading === 'social'}
+            disabled={uploading !== null}
+            onChange={(value) =>
+              setForm({ ...form, socialSharingImage: value })
+            }
+            onUpload={(file) => void onUpload('social', file)}
+          />
         </div>
 
         <div className="field">
@@ -565,37 +544,6 @@ export function PostEditorPage() {
           ) : null}
         </div>
       </form>
-
-      {!isNew && post ? (
-        <div className="panel form-stack" style={{ marginTop: '1rem' }}>
-          <h3 style={{ margin: 0 }}>Upload images</h3>
-          <p className="muted" style={{ margin: 0 }}>
-            Pick a file, then click Upload. Preview appears below after success.
-          </p>
-          <div className="grid-2">
-            <ImageUploadField
-              label="Featured image"
-              currentUrl={mediaUrl(post.featuredImage)}
-              busy={uploading === 'featured'}
-              disabled={uploading !== null}
-              onUpload={(file) => void onUpload('featured', file)}
-            />
-            <ImageUploadField
-              label="Social sharing image"
-              currentUrl={mediaUrl(post.socialSharingImage)}
-              busy={uploading === 'social'}
-              disabled={uploading !== null}
-              onUpload={(file) => void onUpload('social', file)}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="panel form-stack" style={{ marginTop: '1rem' }}>
-          <p className="muted" style={{ margin: 0 }}>
-            Paste image URLs above, or upload files after you click <strong>Create post</strong>.
-          </p>
-        </div>
-      )}
 
       {!isNew && post ? (
         <div className="panel form-stack" style={{ marginTop: '1rem' }}>
@@ -644,45 +592,55 @@ export function PostEditorPage() {
   );
 }
 
-function ImageUploadField({
+function ImageField({
+  id,
   label,
-  currentUrl,
+  value,
   busy,
   disabled,
+  onChange,
   onUpload,
 }: {
+  id: string;
   label: string;
-  currentUrl: string | null;
+  value: string;
   busy: boolean;
   disabled: boolean;
+  onChange: (value: string) => void;
   onUpload: (file: File) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const preview = value.trim() ? mediaUrl(value.trim()) || value : null;
 
   return (
     <div className="field">
-      <label>{label}</label>
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        placeholder="https://... or upload a file below"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
       <input
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/gif"
         disabled={disabled}
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
       />
       <div className="row-actions">
         <button
           type="button"
-          className="btn btn-primary"
+          className="btn btn-secondary"
           disabled={disabled || !file}
           onClick={() => {
             if (file) onUpload(file);
           }}
         >
-          {busy ? 'Uploading…' : `Upload ${label.toLowerCase()}`}
+          {busy ? 'Uploading…' : 'Upload image'}
         </button>
       </div>
-      {currentUrl ? (
-        <img className="image-preview" src={currentUrl} alt={label} />
-      ) : null}
+      <span className="muted">Paste a link, or choose a file and upload it.</span>
+      {preview ? <img className="image-preview" src={preview} alt={label} /> : null}
     </div>
   );
 }

@@ -8,31 +8,40 @@ import {
   Patch,
   Post,
   Query,
+  BadRequestException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { memoryStorage } from 'multer';
 import { SupabaseAuthGuard } from '../../auth/supabase-auth.guard';
 import { CreateBlogPostDto } from '../dto/post/create-blog-post.dto';
 import { QueryBlogPostDto } from '../dto/post/query-blog-post.dto';
 import { UpdateBlogPostDto } from '../dto/post/update-blog-post.dto';
 import { BlogPostsService } from '../services/blog-posts.service';
+import { UploadsService } from '../services/uploads.service';
 
-const imageStorage = diskStorage({
-  destination: process.env.UPLOAD_DEST || './uploads',
-  filename: (_req, file, cb) => {
-    cb(null, `${uuidv4()}${extname(file.originalname)}`);
-  },
+const imageUpload = FileInterceptor('file', {
+  storage: memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 @Controller('blog/posts')
 @UseGuards(SupabaseAuthGuard)
 export class BlogPostsController {
-  constructor(private readonly blogPostsService: BlogPostsService) {}
+  constructor(
+    private readonly blogPostsService: BlogPostsService,
+    private readonly uploadsService: UploadsService,
+  ) {}
+
+  /** Upload an image and return a public URL. Works before the post is saved. */
+  @Post('uploads')
+  @UseInterceptors(imageUpload)
+  async uploadImage(@UploadedFile() file: Express.Multer.File) {
+    const url = await this.uploadsService.uploadImage(file);
+    return { url };
+  }
 
   @Post()
   create(@Body() dto: CreateBlogPostDto) {
@@ -68,22 +77,24 @@ export class BlogPostsController {
   }
 
   @Post(':id/featured-image')
-  @UseInterceptors(FileInterceptor('file', { storage: imageStorage }))
-  uploadFeaturedImage(
+  @UseInterceptors(imageUpload)
+  async uploadFeaturedImage(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const path = `/uploads/${file.filename}`;
-    return this.blogPostsService.setFeaturedImage(id, path);
+    if (!file) throw new BadRequestException('Choose an image file to upload');
+    const url = await this.uploadsService.uploadImage(file);
+    return this.blogPostsService.setFeaturedImage(id, url);
   }
 
   @Post(':id/social-sharing-image')
-  @UseInterceptors(FileInterceptor('file', { storage: imageStorage }))
-  uploadSocialSharingImage(
+  @UseInterceptors(imageUpload)
+  async uploadSocialSharingImage(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const path = `/uploads/${file.filename}`;
-    return this.blogPostsService.setSocialSharingImage(id, path);
+    if (!file) throw new BadRequestException('Choose an image file to upload');
+    const url = await this.uploadsService.uploadImage(file);
+    return this.blogPostsService.setSocialSharingImage(id, url);
   }
 }
