@@ -68,6 +68,15 @@ function fromLocalInput(value: string): string | undefined {
   return new Date(value).toISOString();
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function estimateReadingTime(content: string): number {
   const words = content
     .replace(/<[^>]*>/g, ' ')
@@ -180,7 +189,7 @@ export function PostEditorPage() {
 
     return {
       title: form.title.trim(),
-      slug: form.slug.trim() || undefined,
+      slug: slugify(form.slug) || undefined,
       excerpt: form.excerpt.trim() || undefined,
       content: form.content,
       status: form.status,
@@ -366,7 +375,7 @@ export function PostEditorPage() {
             />
           </div>
           <div className="field">
-            <label htmlFor="slug">Slug (optional)</label>
+            <label htmlFor="slug">Slug (optional, saved as lowercase)</label>
             <input
               id="slug"
               value={form.slug}

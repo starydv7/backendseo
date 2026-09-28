@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
@@ -11,6 +12,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { PostStatus } from '../../enums/post-status.enum';
+import { slugify } from '../../utils/blog.utils';
 
 export class CreateBlogPostDto {
   @IsString()
@@ -19,9 +21,14 @@ export class CreateBlogPostDto {
   title: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const slug = slugify(value);
+    return slug || undefined;
+  })
   @IsString()
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-    message: 'slug must be lowercase kebab-case',
+    message: 'slug must be lowercase kebab-case, for example seo-testing',
   })
   slug?: string;
 

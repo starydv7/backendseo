@@ -8,12 +8,14 @@ export class ApiError extends Error {
   body: unknown;
 
   constructor(status: number, body: unknown) {
-    const msg =
-      typeof body === 'object' &&
-      body &&
-      'message' in body &&
-      typeof (body as { message: unknown }).message === 'string'
-        ? (body as { message: string }).message
+    const raw =
+      typeof body === 'object' && body && 'message' in body
+        ? (body as { message: unknown }).message
+        : undefined;
+    const msg = Array.isArray(raw)
+      ? raw.map(String).join(', ')
+      : typeof raw === 'string'
+        ? raw
         : `Request failed (${status})`;
     super(msg);
     this.status = status;
